@@ -1,0 +1,4 @@
+# PDF sources — run `make download` to fetch these into data/pdfs/
+GRAMMAR=https://vsnr.org/wp-content/uploads/2021/11/NION-1.pdf
+GLOSSARY=https://vsnr.org/wp-content/uploads/2021/11/NION-Glossary-2011.pdf
+READER=https://vsnr.org/wp-content/uploads/2021/11/NION-II-2011.pdf

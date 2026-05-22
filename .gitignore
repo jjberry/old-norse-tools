@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+dist/
+.coverage
+htmlcov/
+
+# uv
+uv.lock
+
+# Project data (reproducible from PDFs)
+data/pdfs/
+data/*.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# macOS
+.DS_Store
