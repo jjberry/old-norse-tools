@@ -36,9 +36,12 @@ def parse_form(form: str, conn: sqlite3.Connection) -> list[dict]:
                e.strength,
                e.grammar_ref,
                e.principal_parts,
-               e.text_refs
+               e.text_refs,
+               e.page_number     AS glossary_page,
+               p.page_number     AS grammar_page
         FROM   forms   f
-        JOIN   entries e ON f.entry_id = e.id
+        JOIN   entries   e ON f.entry_id = e.id
+        LEFT JOIN paradigms p ON e.paradigm_id = p.id
         WHERE  f.form_normalized = ?
         ORDER  BY e.headword
         """,

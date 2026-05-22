@@ -38,6 +38,7 @@ class Paradigm:
     is_sk_form: bool = False
     example_word: Optional[str] = None
     example_gloss: Optional[str] = None
+    page_number: Optional[int] = None
     forms: list[ParadigmForm] = field(default_factory=list)
 
     def to_dict(self) -> dict:
@@ -51,6 +52,7 @@ class Paradigm:
             "is_sk_form":      self.is_sk_form,
             "example_word":    self.example_word,
             "example_gloss":   self.example_gloss,
+            "page_number":     self.page_number,
             "forms":           [vars(f) for f in self.forms],
         }
 
@@ -66,10 +68,15 @@ _PAGE_HEADER_RE = re.compile(
 )
 
 
+_PAGE_MARKER_RE = re.compile(r"^__PDFPAGE:(\d+)__$")
+
+
 def _extract_full_text(pdf_path: Path) -> str:
+    """Extract text from all pages, injecting __PDFPAGE:N__ markers between pages."""
     parts: list[str] = []
     with pdfplumber.open(pdf_path) as pdf:
         for page in pdf.pages:
+            parts.append(f"__PDFPAGE:{page.page_number}__")
             text = page.extract_text(x_tolerance=2, y_tolerance=3) or ""
             parts.append(text)
     return "\n".join(parts)
@@ -77,6 +84,8 @@ def _extract_full_text(pdf_path: Path) -> str:
 
 def _is_noise_line(line: str) -> bool:
     s = line.strip()
+    if _PAGE_MARKER_RE.match(s):
+        return False   # keep page markers so parsers can track page numbers
     if _PAGE_HEADER_RE.match(s):
         return True
     if re.match(r"^\d{1,3}$", s):
@@ -120,6 +129,9 @@ def _get_section(full_text: str, heading: str) -> str:
 
     TOC occurrences are followed by dots and a page number.
     The section ends at the '— Exercise' variant of the same heading.
+
+    Prepends the most recent __PDFPAGE:N__ marker before the heading so that
+    paradigms on the same page as the heading receive a page number.
     """
     end_heading = heading + " — Exercise"
     start = 0
@@ -140,7 +152,19 @@ def _get_section(full_text: str, heading: str) -> str:
     exercise_start = full_text.find(end_heading, body_start + len(heading))
     if exercise_start == -1:
         exercise_start = len(full_text)
-    return full_text[body_start:exercise_start]
+
+    section = full_text[body_start:exercise_start]
+
+    # Find the last page marker in the text before body_start and prepend it
+    # so parsers know the page of paradigms that open the section.
+    prefix_text = full_text[:body_start]
+    last_marker = None
+    for m in re.finditer(r"^__PDFPAGE:(\d+)__$", prefix_text, re.MULTILINE):
+        last_marker = m.group(0)
+    if last_marker:
+        section = last_marker + "\n" + section
+
+    return section
 
 
 # ---------------------------------------------------------------------------
@@ -160,8 +184,14 @@ def _parse_noun_paradigms(section_text: str) -> list[Paradigm]:
     current_strength: Optional[str] = None
     current_gender: Optional[str] = None
     current: Optional[Paradigm] = None
+    current_page: Optional[int] = None
 
     for ln in lines:
+        pm = _PAGE_MARKER_RE.match(ln)
+        if pm:
+            current_page = int(pm.group(1))
+            continue
+
         m = _NOUN_TYPE_HEADER.match(ln)
         if m:
             current_strength = m.group(1).lower()
@@ -176,6 +206,7 @@ def _parse_noun_paradigms(section_text: str) -> list[Paradigm]:
                 pos="noun",
                 gender=current_gender,
                 strength=current_strength,
+                page_number=current_page,
             )
             rest = ln[m.end():].strip()
             if rest:
@@ -250,8 +281,14 @@ def _parse_adjective_paradigms(section_text: str) -> list[Paradigm]:
     current_strength: Optional[str] = None
     current: Optional[Paradigm] = None
     current_number: Optional[str] = None   # sg / pl within current paradigm
+    current_page: Optional[int] = None
 
     for ln in lines:
+        pm = _PAGE_MARKER_RE.match(ln)
+        if pm:
+            current_page = int(pm.group(1))
+            continue
+
         m = _ADJ_STRENGTH.match(ln)
         if m:
             current_strength = m.group(1).lower()
@@ -264,6 +301,7 @@ def _parse_adjective_paradigms(section_text: str) -> list[Paradigm]:
                 section="3.3.9",
                 pos="adjective",
                 strength=current_strength,
+                page_number=current_page,
             )
             rest = ln[m.end():].strip()
             if rest:
@@ -357,8 +395,14 @@ def _parse_verb_paradigms(section_text: str) -> list[Paradigm]:
     para_counter = 0
     # Two-column tense/mood: [(tense1, mood1), (tense2, mood2)]
     current_cols: list[tuple[str, str]] = []
+    current_page: Optional[int] = None
 
     for ln in lines:
+        pm = _PAGE_MARKER_RE.match(ln)
+        if pm:
+            current_page = int(pm.group(1))
+            continue
+
         m = _VERB_TYPE_HDR.match(ln)
         if m:
             para_counter += 1
@@ -384,6 +428,7 @@ def _parse_verb_paradigms(section_text: str) -> list[Paradigm]:
                 is_sk_form=is_sk,
                 example_word=_fix(example_raw),
                 example_gloss=_find_gloss(ln),
+                page_number=current_page,
             )
             paradigms.append(current)
             current_cols = []

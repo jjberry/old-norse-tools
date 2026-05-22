@@ -27,8 +27,9 @@ def _insert_paradigms(conn: sqlite3.Connection, paradigms: list[dict]) -> None:
         cur.execute(
             """
             INSERT INTO paradigms
-                (paradigm_number, section, pos, gender, strength, example_word, example_gloss)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                (paradigm_number, section, pos, gender, strength,
+                 example_word, example_gloss, page_number)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 p["paradigm_number"],
@@ -38,6 +39,7 @@ def _insert_paradigms(conn: sqlite3.Connection, paradigms: list[dict]) -> None:
                 p.get("strength"),
                 p.get("example_word"),
                 p.get("example_gloss"),
+                p.get("page_number"),
             ),
         )
         paradigm_id = cur.lastrowid
@@ -67,8 +69,8 @@ def _insert_entries(conn: sqlite3.Connection, entries: list[dict]) -> None:
         """
         INSERT INTO entries
             (headword, headword_normalized, pos, gender, strength,
-             definition, grammar_ref, principal_parts, text_refs)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             definition, grammar_ref, principal_parts, text_refs, page_number)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         [
             (
@@ -81,6 +83,7 @@ def _insert_entries(conn: sqlite3.Connection, entries: list[dict]) -> None:
                 e.get("grammar_ref"),
                 e.get("principal_parts"),
                 e.get("text_refs"),
+                e.get("page_number"),
             )
             for e in entries
         ],
@@ -418,6 +421,10 @@ def main(db: str, pdfs: str) -> None:
             )
 
     db_path.parent.mkdir(parents=True, exist_ok=True)
+    # Always start fresh so schema changes take effect without manual migration.
+    for suffix in ("", "-shm", "-wal"):
+        p = db_path.with_suffix(db_path.suffix + suffix)
+        p.unlink(missing_ok=True)
     click.echo(f"Building database at {db_path} ...")
     conn = get_connection(db_path)
 

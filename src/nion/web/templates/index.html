@@ -157,6 +157,14 @@
     .entry-grammar  { color: #89b4fa; font-size: 0.85rem; margin-bottom: 0.2rem; }
     .entry-pp       { color: #89b4fa; font-size: 0.85rem; margin-bottom: 0.2rem; }
 
+    a.pdf-link {
+      color: inherit;
+      text-decoration: underline;
+      text-decoration-color: #45475a;
+      text-underline-offset: 2px;
+    }
+    a.pdf-link:hover { text-decoration-color: currentColor; }
+
     .annotation-panel { color: #bac2de; }
     .annotation-panel .gloss { color: #a6e3a1; }
     .annotation-panel .source-note { color: #585b70; font-size: 0.8rem; margin-top: 0.4rem; }
@@ -231,7 +239,11 @@
         {% for e in item.entries %}
         <div class="entry">
           <div class="entry-head">
+            {% if e.glossary_url %}
+            <a class="pdf-link" href="{{ e.glossary_url }}" target="_blank" title="Open in glossary PDF">{{ e.headword }}</a>
+            {% else %}
             {{ e.headword }}
+            {% endif %}
             <span class="entry-meta">
               &nbsp;{{ e.pos }}{% if e.gender %}&nbsp;·&nbsp;{{ e.gender }}{% endif %}{% if e.strength %}&nbsp;·&nbsp;{{ e.strength }}{% endif %}
             </span>
@@ -243,7 +255,9 @@
           <div class="entry-definition">{{ e.definition }}</div>
           {% endif %}
           {% if e.grammar_ref %}
-          <div class="entry-grammar">Grammar: {{ e.grammar_ref }}</div>
+          <div class="entry-grammar">
+            Grammar:&nbsp;{% if e.grammar_url %}<a class="pdf-link" href="{{ e.grammar_url }}" target="_blank" title="Open in grammar PDF">{{ e.grammar_ref }}</a>{% else %}{{ e.grammar_ref }}{% endif %}
+          </div>
           {% endif %}
         </div>
         {% endfor %}

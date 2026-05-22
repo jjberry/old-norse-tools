@@ -23,7 +23,8 @@ CREATE TABLE IF NOT EXISTS paradigms (
     gender           TEXT,            -- m | f | n
     strength         TEXT,            -- strong | weak
     example_word     TEXT,            -- e.g. "laug"
-    example_gloss    TEXT             -- e.g. "bath"
+    example_gloss    TEXT,            -- e.g. "bath"
+    page_number      INTEGER          -- 1-based physical page in grammar.pdf
 );
 
 -- Individual cells of a paradigm table
@@ -51,7 +52,8 @@ CREATE TABLE IF NOT EXISTS entries (
     definition          TEXT NOT NULL,
     grammar_ref         TEXT,            -- raw Gr reference string e.g. "Gr 3.1.8 (1)"
     principal_parts     TEXT,            -- JSON array for verbs
-    text_refs           TEXT             -- JSON array of text+line refs e.g. ["I:31", "VI:5"]
+    text_refs           TEXT,            -- JSON array of text+line refs e.g. ["I:31", "VI:5"]
+    page_number         INTEGER          -- 1-based physical page in glossary.pdf
 );
 
 CREATE INDEX IF NOT EXISTS idx_entries_headword_normalized

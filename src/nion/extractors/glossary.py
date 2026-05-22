@@ -202,7 +202,7 @@ def _find_pos(text: str) -> tuple[Optional[str], Optional[str], Optional[str], i
 # Entry parser
 # ---------------------------------------------------------------------------
 
-def _parse_entry(raw_text: str) -> Optional[dict]:
+def _parse_entry(raw_text: str, page_number: Optional[int] = None) -> Optional[dict]:
     """Parse one glossary entry (all its lines joined) into a structured dict."""
     text = _fix(raw_text)
     if not text:
@@ -234,6 +234,7 @@ def _parse_entry(raw_text: str) -> Optional[dict]:
             "grammar_ref":         None,
             "principal_parts":     None,
             "text_refs":           None,
+            "page_number":         page_number,
         }
 
     # --- Normalize rare POS marker typos before searching ---
@@ -275,6 +276,7 @@ def _parse_entry(raw_text: str) -> Optional[dict]:
         "grammar_ref":         grammar_ref,
         "principal_parts":     principal_parts,
         "text_refs":           json.dumps(text_refs) if text_refs else None,
+        "page_number":         page_number,
     }
 
 
@@ -283,8 +285,12 @@ def _parse_entry(raw_text: str) -> Optional[dict]:
 # ---------------------------------------------------------------------------
 
 def _iter_entry_texts(pdf_path: Path):
-    """Yield raw entry texts by grouping lines from the glossary pages."""
+    """Yield (raw_text, page_number) tuples by grouping lines from glossary pages.
+
+    page_number is the 1-based physical PDF page where the entry begins.
+    """
     current_lines: list[str] = []
+    current_page: int = 0
 
     with pdfplumber.open(pdf_path) as pdf:
         pages = pdf.pages[_GLOSSARY_FIRST_PAGE : _GLOSSARY_LAST_PAGE + 1]
@@ -299,13 +305,14 @@ def _iter_entry_texts(pdf_path: Path):
 
                 if _is_new_entry(x0):
                     if current_lines:
-                        yield " ".join(current_lines)
+                        yield " ".join(current_lines), current_page
                     current_lines = [line_text]
+                    current_page = page.page_number
                 else:
                     current_lines.append(line_text)
 
     if current_lines:
-        yield " ".join(current_lines)
+        yield " ".join(current_lines), current_page
 
 
 # ---------------------------------------------------------------------------
@@ -318,8 +325,8 @@ def extract_entries(pdf_path: Path) -> list[dict]:
     Each dict has keys matching the ``entries`` table schema.
     """
     entries: list[dict] = []
-    for raw_text in _iter_entry_texts(pdf_path):
-        entry = _parse_entry(raw_text)
+    for raw_text, page_number in _iter_entry_texts(pdf_path):
+        entry = _parse_entry(raw_text, page_number)
         if entry is not None:
             entries.append(entry)
     return entries

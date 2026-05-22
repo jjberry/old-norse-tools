@@ -7,6 +7,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from nion.db.schema import get_connection
@@ -15,10 +16,13 @@ from nion.morphology.ranker import rank_analyses
 
 DATA_DIR      = Path(__file__).parent.parent.parent.parent / "data"
 DB_PATH       = DATA_DIR / "nion.db"
+PDF_DIR       = DATA_DIR / "pdfs"
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
 app       = FastAPI(title="Old Norse Tools")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+app.mount("/pdfs", StaticFiles(directory=str(PDF_DIR)), name="pdfs")
 
 _conn = None
 
@@ -136,15 +140,19 @@ def _build_token_data(tokens: list[str], conn) -> list[dict]:
             if eid in seen_entries:
                 continue
             seen_entries.add(eid)
+            glossary_page = r.get("glossary_page")
+            grammar_page  = r.get("grammar_page")
             entries.append({
-                "headword":       r.get("headword") or "",
-                "pos":            r.get("pos") or "",
-                "gender":         r.get("entry_gender") or "",
-                "strength":       r.get("strength") or "",
-                "definition":     r.get("definition") or "",
-                "grammar_ref":    r.get("grammar_ref") or "",
+                "headword":        r.get("headword") or "",
+                "pos":             r.get("pos") or "",
+                "gender":          r.get("entry_gender") or "",
+                "strength":        r.get("strength") or "",
+                "definition":      r.get("definition") or "",
+                "grammar_ref":     r.get("grammar_ref") or "",
                 "principal_parts": r.get("principal_parts") or "",
-                "text_refs":      r.get("text_refs") or "",
+                "text_refs":       r.get("text_refs") or "",
+                "glossary_url":    f"/pdfs/glossary.pdf#page={glossary_page}" if glossary_page else None,
+                "grammar_url":     f"/pdfs/grammar.pdf#page={grammar_page}"   if grammar_page  else None,
             })
 
         # If only annotation results, build a minimal entry card
