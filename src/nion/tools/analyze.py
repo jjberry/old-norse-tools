@@ -11,6 +11,7 @@ from rich.text import Text
 
 from nion.db.schema import get_connection
 from nion.morphology.parser import parse_form
+from nion.morphology.ranker import rank_analyses
 
 DATA_DIR = Path(__file__).parent.parent.parent.parent / "data"
 DB_PATH = DATA_DIR / "nion.db"
@@ -124,7 +125,6 @@ def _dedupe(results: list[dict]) -> list[dict]:
 
 
 def _print_token(token: str, results: list[dict]) -> None:
-    results = _dedupe(sorted(results, key=_sort_key))
 
     console.print(Text(token, style="bold white"))
 
@@ -170,8 +170,12 @@ def main(text: str | None, db: str, input_file: str | None) -> None:
         raise click.UsageError("No words found in input.")
 
     console.print()
+    prev_token: str | None = None
     for token in tokens:
-        _print_token(token, parse_form(token, conn))
+        results = _dedupe(sorted(parse_form(token, conn), key=_sort_key))
+        results = rank_analyses(results, prev_token)
+        _print_token(token, results)
+        prev_token = token
 
 
 if __name__ == "__main__":
