@@ -48,10 +48,11 @@ def parse_form(form: str, conn: sqlite3.Connection) -> list[dict]:
         (form_norm,),
     ).fetchall()
 
-    if rows:
-        return [{**dict(r), "source": "paradigm"} for r in rows]
+    paradigm_results = [{**dict(r), "source": "paradigm"} for r in rows]
 
-    # Fallback: function words and forms from reader annotations.
+    # Always query function_words: if paradigm results exist we still need
+    # annotation results whose POS differs (e.g. "ok" is both the past tense
+    # of aka/verb and the ubiquitous conjunction — normalization collapses ók→ok).
     fw_rows = conn.execute(
         """
         SELECT form, case_, number, gender, person, mood, tense,
@@ -64,4 +65,15 @@ def parse_form(form: str, conn: sqlite3.Connection) -> list[dict]:
         (form_norm,),
     ).fetchall()
 
-    return [{**dict(r), "source": "annotation"} for r in fw_rows]
+    if not paradigm_results:
+        return [{**dict(r), "source": "annotation"} for r in fw_rows]
+
+    # Paradigm results found: append any annotation results with a different POS
+    # so that cross-category homographs (ok/conjunction vs ók/verb) are both shown.
+    paradigm_pos = {r["pos"] for r in paradigm_results}
+    cross_pos = [
+        {**dict(r), "source": "annotation"}
+        for r in fw_rows
+        if dict(r).get("pos") not in paradigm_pos
+    ]
+    return paradigm_results + cross_pos

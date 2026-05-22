@@ -11,7 +11,7 @@ from nion.db.schema import get_connection
 from nion.extractors.grammar import extract_paradigms
 from nion.extractors.glossary import extract_entries
 from nion.extractors.reader import extract_annotations
-from nion.morphology.generator import generate_forms
+from nion.morphology.generator import generate_forms, generate_strong_verb_forms
 
 DATA_DIR = Path(__file__).parent.parent.parent.parent / "data"
 PDF_DIR  = DATA_DIR / "pdfs"
@@ -297,6 +297,38 @@ def _generate_all_forms(conn: sqlite3.Connection) -> int:
         inserted += len(forms)
 
     conn.commit()
+
+    # Strong verbs: generate from principal parts (past tense + full present).
+    # This covers verbs not linked to a paradigm, and adds past forms to those
+    # that are (paradigm generation only produces present forms for strong verbs).
+    _INSERT_FORMS_SQL = """
+        INSERT INTO forms
+            (form, form_normalized, entry_id, case_, number, gender, person, mood, tense)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """
+    sv_inserted = 0
+    for entry in conn.execute(
+        "SELECT id, headword, principal_parts FROM entries "
+        "WHERE pos='verb' AND strength='strong' AND principal_parts IS NOT NULL"
+    ):
+        forms = generate_strong_verb_forms(entry["headword"], entry["principal_parts"])
+        if not forms:
+            continue
+        conn.executemany(
+            _INSERT_FORMS_SQL,
+            [
+                (
+                    f["form"], f["form_normalized"], entry["id"],
+                    f.get("case_"), f.get("number"), f.get("gender"),
+                    f.get("person"), f.get("mood"), f.get("tense"),
+                )
+                for f in forms
+            ],
+        )
+        sv_inserted += len(forms)
+
+    conn.commit()
+    inserted += sv_inserted
     return inserted
 
 
@@ -325,9 +357,14 @@ def _populate_function_words(conn: sqlite3.Connection) -> int:
     conn.commit()
 
     # Forms already covered by paradigm generation — skip those.
+    # Coverage is keyed on (form_normalized, pos) so that a verb form covering
+    # "ok" (normalized ók) does not suppress the conjunction "ok".
     covered = {
-        row["form_normalized"]
-        for row in conn.execute("SELECT DISTINCT form_normalized FROM forms")
+        (row["form_normalized"], row["pos"])
+        for row in conn.execute(
+            "SELECT DISTINCT f.form_normalized, e.pos "
+            "FROM forms f JOIN entries e ON f.entry_id = e.id"
+        )
     }
 
     # Collect annotations, deduplicate, prefer entries with headwords.
@@ -339,7 +376,7 @@ def _populate_function_words(conn: sqlite3.Connection) -> int:
         form     = row["surface_form"]
         form_norm = normalize_for_search(form)
 
-        if form_norm in covered:
+        if (form_norm, row["pos"]) in covered:
             continue
 
         tags: dict = {}
@@ -447,7 +484,7 @@ def main(db: str, pdfs: str) -> None:
     linked = _link_entries_to_paradigms(conn)
     click.echo(f"        {linked} entries linked to paradigms.")
     total_forms = _generate_all_forms(conn)
-    click.echo(f"        {total_forms} inflected forms generated.")
+    click.echo(f"        {total_forms} inflected forms generated (incl. strong verbs from principal parts).")
 
     click.echo("  [5/5] Populating function word fallback table ...")
     fw_count = _populate_function_words(conn)

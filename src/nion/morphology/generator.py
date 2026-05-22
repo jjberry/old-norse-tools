@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from nion.encoding import normalize_for_search
 
 
@@ -235,6 +237,154 @@ def _generate_verb_forms(
                 if key not in seen:
                     seen.add(key)
                     results.append(_make_result(new_form, f))
+
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Strong verb generation from principal parts
+# ---------------------------------------------------------------------------
+
+# Patterns for extracting the four principal parts from the glossary string.
+# Format: "pres. X, past Y, past pl. Z, pp. W"
+# Some entries omit fields; some have grammar refs or alternates (X/Y or X, Y).
+
+# _PP_PP_RE captures everything after "pp. (n. )?" up to the next field keyword.
+# The negative lookahead on "," prevents stopping at commas that introduce
+# alternate forms (e.g. "pp. búinn, búit/bút") while still stopping before
+# a new field (e.g. "pp. gefinn, pp. n. gefit").
+_PP_PRES_RE    = re.compile(r"\bpres\.\s+(\S+?)(?=\s*(?:,|Gr\b|$))")
+_PP_PAST_SG_RE = re.compile(r"\bpast\s+(?!pl\.|subj\.)(\S+)")
+_PP_PAST_PL_RE = re.compile(r"\bpast\s+pl\.\s+(\S+)")
+_PP_PP_RE      = re.compile(
+    r"\bpp\.\s+(?:n\.\s+)?"
+    r"((?:[^,]|,(?!\s*(?:pres\.|past\b|pp\.|[A-Z]|$)))+)"
+)
+
+_FIELD_SEP_RE = re.compile(r"[/,]")
+
+
+def _alts(raw: str) -> list[str]:
+    """Split on '/' and ',' separators, strip punctuation, drop empty."""
+    return [p.strip(" .,;") for p in _FIELD_SEP_RE.split(raw) if p.strip(" .,;")]
+
+
+def _parse_principal_parts(pp_str: str) -> dict[str, list[str]]:
+    """Extract key forms from a glossary principal-parts string.
+
+    Returns a dict with keys pres_sg, past_sg, past_pl, pp — each a
+    (possibly empty) list of alternate surface forms.
+    """
+    result: dict[str, list[str]] = {
+        "pres_sg": [],
+        "past_sg": [],
+        "past_pl": [],
+        "pp":      [],
+    }
+    m = _PP_PRES_RE.search(pp_str)
+    if m:
+        result["pres_sg"] = _alts(m.group(1))
+
+    m = _PP_PAST_PL_RE.search(pp_str)
+    if m:
+        result["past_pl"] = _alts(m.group(1))
+
+    m = _PP_PAST_SG_RE.search(pp_str)
+    if m:
+        result["past_sg"] = _alts(m.group(1))
+
+    for m in _PP_PP_RE.finditer(pp_str):
+        result["pp"].extend(_alts(m.group(1)))
+
+    return result
+
+
+def generate_strong_verb_forms(headword: str, pp_str: str) -> list[dict]:
+    """Generate inflected forms for a strong verb using its principal parts.
+
+    Covers: infinitive, present participle, imperative, present indicative
+    (all persons/numbers), present subjunctive, past indicative (1/3sg, all pl),
+    and past participle.
+
+    Skips past 2sg indicative (dental suffix is too irregular) and past
+    subjunctive (requires i-umlaut of the past-plural stem, which varies by
+    class).  Also skips present 1pl umlaut for class 6/7 verbs — those verbs
+    are handled by the existing paradigm extraction for fara/falla.
+    """
+    pp = _parse_principal_parts(pp_str)
+
+    # Infinitive stem: strip -a (most verbs) or -ja (ja-infinitives)
+    if headword.endswith("ja"):
+        inf_stem = headword[:-2]
+    elif headword.endswith("a"):
+        inf_stem = headword[:-1]
+    else:
+        inf_stem = headword
+
+    results: list[dict] = []
+    seen:    set         = set()
+
+    def add(form_str: str, **morph) -> None:
+        for alt in _alts(form_str):
+            if not alt:
+                continue
+            key = (normalize_for_search(alt),
+                   morph.get("mood"), morph.get("tense"),
+                   morph.get("person"), morph.get("number"))
+            if key not in seen:
+                seen.add(key)
+                results.append({
+                    "form":            alt,
+                    "form_normalized": normalize_for_search(alt),
+                    "case_":           None,
+                    "gender":          None,
+                    **morph,
+                })
+
+    # --- Infinitive & present participle ---
+    add(headword,           mood="infin",     tense=None,   person=None, number=None)
+    add(inf_stem + "andi",  mood="pres_part", tense="pres", person=None, number=None)
+
+    # --- Imperative 2sg: bare infinitive stem (= base form without -a) ---
+    add(inf_stem, mood="imp", tense=None, person="2", number="sg")
+
+    # --- Present indicative ---
+    for form in pp["pres_sg"]:
+        add(form,              mood="indic", tense="pres", person="2", number="sg")
+        add(form,              mood="indic", tense="pres", person="3", number="sg")
+        # 1sg = 2/3sg minus final -r (e.g. ferr→fer, skýtr→skýt)
+        if form.endswith("rr"):
+            add(form[:-1],     mood="indic", tense="pres", person="1", number="sg")
+        elif form.endswith("r"):
+            add(form[:-1],     mood="indic", tense="pres", person="1", number="sg")
+
+    add(inf_stem + "um",  mood="indic", tense="pres", person="1", number="pl")
+    add(inf_stem + "ið",  mood="indic", tense="pres", person="2", number="pl")
+    add(inf_stem + "a",   mood="indic", tense="pres", person="3", number="pl")
+
+    # --- Present subjunctive ---
+    add(inf_stem + "a",   mood="subj",  tense="pres", person="1", number="sg")
+    add(inf_stem + "ir",  mood="subj",  tense="pres", person="2", number="sg")
+    add(inf_stem + "i",   mood="subj",  tense="pres", person="3", number="sg")
+    add(inf_stem + "im",  mood="subj",  tense="pres", person="1", number="pl")
+    add(inf_stem + "ið",  mood="subj",  tense="pres", person="2", number="pl")
+    add(inf_stem + "i",   mood="subj",  tense="pres", person="3", number="pl")
+
+    # --- Past indicative ---
+    for form in pp["past_sg"]:
+        add(form, mood="indic", tense="past", person="1", number="sg")
+        add(form, mood="indic", tense="past", person="3", number="sg")
+
+    for form in pp["past_pl"]:
+        add(form, mood="indic", tense="past", person="3", number="pl")
+        # 1pl and 2pl: strip trailing -u to get the stem
+        stem = form[:-1] if form.endswith("u") else form
+        add(stem + "um",  mood="indic", tense="past", person="1", number="pl")
+        add(stem + "uð",  mood="indic", tense="past", person="2", number="pl")
+
+    # --- Past participle ---
+    for form in pp["pp"]:
+        add(form, mood="past_part", tense="past", person=None, number=None)
 
     return results
 
