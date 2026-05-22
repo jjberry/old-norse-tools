@@ -1,4 +1,4 @@
-.PHONY: install download build test
+.PHONY: install download build test serve
 
 install:
 	uv sync --dev
@@ -14,3 +14,6 @@ build:
 
 test:
 	uv run pytest
+
+serve:
+	uv run nion-serve --reload

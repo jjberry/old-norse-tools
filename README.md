@@ -17,7 +17,7 @@ The project has three phases:
    a word-by-word morphological and lexical analysis in the style of the
    annotated Reader texts, similar in spirit to the
    [Perseus Digital Library](https://www.perseus.tufts.edu) tools for Latin
-   and Greek.
+   and Greek. Available as both a CLI and a local web interface.
 
 ---
 
@@ -64,6 +64,9 @@ make build
 
 # Run tests
 make test
+
+# Start the web interface
+make serve
 ```
 
 ---
@@ -114,6 +117,19 @@ show all possibilities. Results marked `[reader]` come from the annotated glosse
 the NION Reader rather than the paradigm tables — useful for pronouns, prepositions,
 conjunctions, and strong verb forms that paradigm generation cannot derive.
 
+### Web interface
+
+```bash
+make serve
+# then open http://127.0.0.1:8000
+```
+
+The web interface accepts the same input as the CLI. Each word in the results is
+clickable — clicking it expands an inline panel showing the full glossary entry,
+grammar cross-references (e.g., *Grammar* § 3.1.8), and all text citations.
+Candidate analyses are ranked automatically when a word follows a preposition with
+an unambiguous governed case (e.g., *til* always takes the genitive).
+
 ---
 
 ## Project structure
@@ -128,9 +144,14 @@ src/nion/
 │   └── reader.py        # Parse Text I annotations from the Reader PDF
 ├── morphology/
 │   ├── generator.py     # Generate all inflected forms from a paradigm
-│   └── parser.py        # Look up surface forms in the database
-└── tools/
-    └── analyze.py       # CLI text analysis tool (Phase 3)
+│   ├── parser.py        # Look up surface forms in the database
+│   └── ranker.py        # Rank analyses by preposition case governance
+├── tools/
+│   └── analyze.py       # CLI text analysis tool
+└── web/
+    ├── app.py           # FastAPI web application
+    └── templates/
+        └── index.html   # Single-page interface with inline entry expansion
 ```
 
 ---
