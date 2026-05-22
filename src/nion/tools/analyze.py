@@ -94,8 +94,8 @@ def _trim_definition(defn: str) -> str:
     # Strip leading grammar ref like "(Gr 3.6.6) " or "3.1.8 (9) "
     defn = re.sub(r"^\s*\(?\s*Gr\s+[\d.]+.*?\)\s*", "", defn).strip()
     defn = re.sub(r"^\d+\.\s*", "", defn).strip()  # leading "1. "
-    # Cut at first Roman-numeral text citation like "I:1" or "II:82"
-    defn = re.sub(r"\s+[IVX]+:\d.*$", "", defn, flags=re.DOTALL).strip()
+    # Cut at first Roman-numeral text citation like "I:1", "II:82", or "XXVI B:20"
+    defn = re.sub(r"\s+[IVX]+(?:\s+[A-Z])?:\d.*$", "", defn, flags=re.DOTALL).strip()
     # Cut at double-space (glossary uses double-space before notes)
     defn = defn.split("  ")[0].strip()
     # Hard cap

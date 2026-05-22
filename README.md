@@ -82,11 +82,38 @@ nion-build --pdfs path/to/pdfs --db path/to/output.db
 
 ```bash
 # Pass text directly
-nion-analyze "Bƒðvarr gengr nú til fess rúms sem honum líkaði"
+nion-analyze "konungr spyrr um mat ok drykk"
 
 # Or from a file
 nion-analyze --file my_text.txt
 ```
+
+Example output:
+
+```
+konungr
+  konungr (noun m) — nom.sg — king, the king
+
+spyrr
+  spyrja (verb weak) — 2sg pres — ask
+  spyrja (verb weak) — 3sg pres — ask
+
+um
+  ?  no match
+
+mat
+  matr (noun m) — acc.sg — food
+
+ok
+  ?  no match
+
+drykk
+  drykkr (noun m) — acc.sg — drink, draught
+```
+
+Words with multiple analyses (like `spyrr`, which is ambiguous between 2nd and 3rd
+person) show all possibilities. Function words and uninflected particles not covered
+by the paradigm tables show `?  no match`.
 
 ---
 
