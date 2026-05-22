@@ -17,8 +17,9 @@ import re
 
 # Characters that are unambiguously wrong in Old Norse text
 _DEFINITE: dict[str, str] = {
-    "›": "ð",  # › → ð (eth)
-    "ƒ": "ǫ",  # ƒ → ǫ (o with ogonek)
+    "›": "ð",  # › (U+203A) → ð (eth)
+    "ƒ": "ǫ",  # ƒ (U+0192) → ǫ (o with ogonek)
+    "‡": "ý",  # ‡ (U+2021) → ý (y with acute) — grammar PDF artifact
     "¯": "",   # macron artifact — strip
     "": "",   # Apple private-use glyph — strip
 }
