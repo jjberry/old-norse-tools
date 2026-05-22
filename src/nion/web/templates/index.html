@@ -169,6 +169,41 @@
     .annotation-panel .gloss { color: #a6e3a1; }
     .annotation-panel .source-note { color: #585b70; font-size: 0.8rem; margin-top: 0.4rem; }
 
+    /* ── Character palette ── */
+    .char-palette {
+      align-items: center;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      margin-top: -2rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .char-label {
+      color: #6c7086;
+      font-size: 0.75rem;
+      margin-right: 0.15rem;
+      white-space: nowrap;
+    }
+
+    .char-btn {
+      background: none;
+      border: 1px solid #313244;
+      border-radius: 3px;
+      color: #89dceb;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.9rem;
+      line-height: 1;
+      padding: 0.2rem 0.45rem;
+      transition: border-color 0.12s, color 0.12s;
+    }
+
+    .char-btn:hover {
+      border-color: #89dceb;
+      color: #cdd6f4;
+    }
+
     /* ── PDF nav ── */
     .pdf-nav {
       display: flex;
@@ -208,6 +243,7 @@
 
 <form method="post" action="/analyze">
   <input
+    id="text-input"
     name="text"
     type="text"
     autofocus
@@ -217,6 +253,22 @@
   >
   <button type="submit">Analyze</button>
 </form>
+
+<div class="char-palette">
+  <span class="char-label">Insert:</span>
+  <button class="char-btn" type="button" onclick="insertChar('á')" title="a with acute">á</button>
+  <button class="char-btn" type="button" onclick="insertChar('é')" title="e with acute">é</button>
+  <button class="char-btn" type="button" onclick="insertChar('í')" title="i with acute">í</button>
+  <button class="char-btn" type="button" onclick="insertChar('ó')" title="o with acute">ó</button>
+  <button class="char-btn" type="button" onclick="insertChar('ú')" title="u with acute">ú</button>
+  <button class="char-btn" type="button" onclick="insertChar('ý')" title="y with acute">ý</button>
+  <button class="char-btn" type="button" onclick="insertChar('æ')" title="ae ligature">æ</button>
+  <button class="char-btn" type="button" onclick="insertChar('œ')" title="oe ligature">œ</button>
+  <button class="char-btn" type="button" onclick="insertChar('ø')" title="o with stroke">ø</button>
+  <button class="char-btn" type="button" onclick="insertChar('ǫ')" title="o with ogonek">ǫ</button>
+  <button class="char-btn" type="button" onclick="insertChar('ð')" title="eth">ð</button>
+  <button class="char-btn" type="button" onclick="insertChar('þ')" title="thorn">þ</button>
+</div>
 
 {% if token_data %}
 <div class="results">
@@ -304,6 +356,15 @@
 <script>
   function toggle(id) {
     document.getElementById(id).classList.toggle('open');
+  }
+
+  function insertChar(ch) {
+    const input = document.getElementById('text-input');
+    const start = input.selectionStart;
+    const end   = input.selectionEnd;
+    input.value = input.value.slice(0, start) + ch + input.value.slice(end);
+    input.selectionStart = input.selectionEnd = start + ch.length;
+    input.focus();
   }
 </script>
 
