@@ -13,8 +13,8 @@ dependencies = [
 nion-build = "nion.scripts.build_db:main"
 nion-analyze = "nion.tools.analyze:main"
 
-[tool.uv]
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
 ]
