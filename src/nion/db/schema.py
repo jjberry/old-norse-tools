@@ -86,6 +86,27 @@ CREATE TABLE IF NOT EXISTS annotations (
     gloss            TEXT,
     grammar_ref      TEXT
 );
+
+-- Lookup table for function words and irregular forms not covered by paradigm
+-- generation.  Seeded from reader annotations; can be supplemented by hand.
+CREATE TABLE IF NOT EXISTS function_words (
+    id               INTEGER PRIMARY KEY,
+    form             TEXT NOT NULL,
+    form_normalized  TEXT NOT NULL,
+    headword         TEXT,
+    pos              TEXT,
+    case_            TEXT,
+    number           TEXT,
+    gender           TEXT,
+    person           TEXT,
+    mood             TEXT,
+    tense            TEXT,
+    gloss            TEXT,
+    source           TEXT NOT NULL DEFAULT 'annotation'  -- annotation | manual
+);
+
+CREATE INDEX IF NOT EXISTS idx_function_words_normalized
+    ON function_words(form_normalized);
 """
 
 

@@ -80,7 +80,7 @@ def _format_pos(r: dict) -> Text:
     qualifier    = " ".join(p for p in (entry_gender, strength) if p)
 
     t = Text()
-    t.append(r["headword"], style="bold")
+    t.append(r["headword"] or r.get("form") or "?", style="bold")
     t.append(" (")
     t.append(label, style=color)
     if qualifier:
@@ -132,8 +132,9 @@ def _print_token(token: str, results: list[dict]) -> None:
         console.print("  [dim]?  no match[/dim]")
     else:
         for r in results:
-            morph = _format_morphology(r)
-            defn  = _trim_definition(r.get("definition") or "")
+            morph  = _format_morphology(r)
+            defn   = _trim_definition(r.get("definition") or "")
+            source = r.get("source", "paradigm")
 
             line = Text("  ")
             line.append_text(_format_pos(r))
@@ -141,6 +142,8 @@ def _print_token(token: str, results: list[dict]) -> None:
             line.append(morph or "—", style="italic")
             line.append(" — ", style="dim")
             line.append(defn or "—", style="dim")
+            if source == "annotation":
+                line.append("  [reader]", style="dim italic")
             console.print(line)
 
     console.print()

@@ -1,5 +1,6 @@
 """Orchestrate all extractors to build the SQLite database from PDFs."""
 
+import json
 import re
 import sqlite3
 from pathlib import Path
@@ -297,6 +298,104 @@ def _generate_all_forms(conn: sqlite3.Connection) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Phase 2 helpers: function word table
+# ---------------------------------------------------------------------------
+
+# Annotations store mood="indic" for indicative forms, but our forms table
+# (and function_words table) use mood=NULL for indicative — it's the default.
+_MOOD_MAP = {"indic": None}
+
+
+def _populate_function_words(conn: sqlite3.Connection) -> int:
+    """Seed function_words from reader annotations.
+
+    Deduplicates on (form_normalized, pos, case_, number, gender, person,
+    mood, tense) — the full morphological fingerprint — keeping the entry
+    with a headword when available.  Only inserts forms not already covered
+    by the paradigm-generated forms table.
+
+    Returns the number of rows inserted.
+    """
+    from nion.encoding import normalize_for_search
+
+    conn.execute("DELETE FROM function_words")
+    conn.commit()
+
+    # Forms already covered by paradigm generation — skip those.
+    covered = {
+        row["form_normalized"]
+        for row in conn.execute("SELECT DISTINCT form_normalized FROM forms")
+    }
+
+    # Collect annotations, deduplicate, prefer entries with headwords.
+    seen: dict[tuple, dict] = {}
+
+    for row in conn.execute(
+        "SELECT surface_form, headword, pos, grammatical_tags, gloss FROM annotations"
+    ):
+        form     = row["surface_form"]
+        form_norm = normalize_for_search(form)
+
+        if form_norm in covered:
+            continue
+
+        tags: dict = {}
+        if row["grammatical_tags"]:
+            try:
+                tags = json.loads(row["grammatical_tags"])
+            except json.JSONDecodeError:
+                pass
+
+        case_   = tags.get("case")
+        number  = tags.get("number")
+        gender  = tags.get("gender")
+        person  = tags.get("person")
+        raw_mood = tags.get("mood")
+        mood    = _MOOD_MAP.get(raw_mood, raw_mood)
+        tense   = tags.get("tense")
+
+        key = (form_norm, row["pos"], case_, number, gender, person, mood, tense)
+
+        existing = seen.get(key)
+        if existing is None or (not existing["headword"] and row["headword"]):
+            seen[key] = {
+                "form":           form,
+                "form_normalized": form_norm,
+                "headword":       row["headword"],
+                "pos":            row["pos"],
+                "case_":          case_,
+                "number":         number,
+                "gender":         gender,
+                "person":         person,
+                "mood":           mood,
+                "tense":          tense,
+                "gloss":          row["gloss"],
+            }
+
+    if not seen:
+        return 0
+
+    conn.executemany(
+        """
+        INSERT INTO function_words
+            (form, form_normalized, headword, pos,
+             case_, number, gender, person, mood, tense, gloss)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            (
+                e["form"], e["form_normalized"], e["headword"], e["pos"],
+                e["case_"], e["number"], e["gender"], e["person"],
+                e["mood"], e["tense"], e["gloss"],
+            )
+            for e in seen.values()
+        ],
+    )
+    conn.commit()
+    return len(seen)
+
+
+# ---------------------------------------------------------------------------
 # CLI entry point
 # ---------------------------------------------------------------------------
 
@@ -337,11 +436,15 @@ def main(db: str, pdfs: str) -> None:
     _insert_annotations(conn, annotations)
     click.echo(f"        {len(annotations)} annotations inserted.")
 
-    click.echo("  [4/4] Linking entries to paradigms and generating forms ...")
+    click.echo("  [4/5] Linking entries to paradigms and generating forms ...")
     linked = _link_entries_to_paradigms(conn)
     click.echo(f"        {linked} entries linked to paradigms.")
     total_forms = _generate_all_forms(conn)
     click.echo(f"        {total_forms} inflected forms generated.")
+
+    click.echo("  [5/5] Populating function word fallback table ...")
+    fw_count = _populate_function_words(conn)
+    click.echo(f"        {fw_count} function word entries inserted.")
 
     click.echo("Done.")
 

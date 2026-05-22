@@ -8,13 +8,17 @@ from nion.encoding import normalize_for_search
 
 
 def parse_form(form: str, conn: sqlite3.Connection) -> list[dict]:
-    """Look up *form* in the pre-generated forms table.
+    """Look up *form* and return all morphological analyses.
 
-    Returns a list of analysis dicts, one per matching entry.  Each dict has:
-    headword, definition, pos, entry_gender, strength, form, case_, number,
-    gender, person, mood, tense.
+    Queries the paradigm-generated forms table first.  If nothing is found,
+    falls back to the function_words table (seeded from reader annotations).
+
+    Each result dict has: headword, definition, pos, entry_gender, strength,
+    form, case_, number, gender, person, mood, tense, source.
+    source is 'paradigm' or 'annotation'.
     """
     form_norm = normalize_for_search(form)
+
     rows = conn.execute(
         """
         SELECT f.form,
@@ -36,4 +40,21 @@ def parse_form(form: str, conn: sqlite3.Connection) -> list[dict]:
         """,
         (form_norm,),
     ).fetchall()
-    return [dict(r) for r in rows]
+
+    if rows:
+        return [{**dict(r), "source": "paradigm"} for r in rows]
+
+    # Fallback: function words and forms from reader annotations.
+    fw_rows = conn.execute(
+        """
+        SELECT form, case_, number, gender, person, mood, tense,
+               headword, gloss AS definition, pos,
+               NULL AS entry_gender, NULL AS strength
+        FROM   function_words
+        WHERE  form_normalized = ?
+        ORDER  BY headword
+        """,
+        (form_norm,),
+    ).fetchall()
+
+    return [{**dict(r), "source": "annotation"} for r in fw_rows]
