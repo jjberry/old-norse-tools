@@ -228,6 +228,91 @@
       border-color: #89b4fa;
       color: #cdd6f4;
     }
+
+    /* ── Lookup form ── */
+    .lookup-section { margin-top: 3rem; border-top: 1px solid #313244; padding-top: 2rem; }
+
+    .lookup-section h2 {
+      color: #89b4fa;
+      font-size: 0.9rem;
+      letter-spacing: 0.04em;
+      margin-bottom: 1rem;
+      text-transform: uppercase;
+    }
+
+    input[name="headword"] {
+      flex: 1;
+      background: #313244;
+      border: 1px solid #45475a;
+      border-radius: 4px;
+      color: #cdd6f4;
+      font-family: inherit;
+      font-size: 1rem;
+      padding: 0.5rem 0.85rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    input[name="headword"]:focus { border-color: #89b4fa; }
+
+    /* ── Lookup results ── */
+    .lookup-results { display: flex; flex-direction: column; gap: 2rem; }
+
+    .lookup-entry {
+      background: #26263e;
+      border-left: 3px solid #89b4fa;
+      border-radius: 0 4px 4px 0;
+      padding: 1.25rem 1.4rem;
+    }
+
+    .lookup-hw {
+      color: #89b4fa;
+      font-size: 1.15rem;
+      font-weight: bold;
+      margin-bottom: 0.5rem;
+    }
+
+    .lookup-hw .lk-meta { color: #6c7086; font-size: 0.85rem; font-weight: normal; }
+
+    .lookup-pp    { color: #89b4fa; font-size: 0.85rem; margin-bottom: 0.3rem; }
+    .lookup-defn  { color: #cdd6f4; line-height: 1.55; margin-bottom: 0.6rem; word-break: break-word; }
+    .lookup-gr    { color: #a6e3a1; font-size: 0.85rem; margin-bottom: 0.9rem; }
+
+    /* ── Paradigm table ── */
+    .paradigm { margin-top: 0.5rem; }
+
+    .paradigm-section { margin-bottom: 1rem; }
+
+    .paradigm-section-label {
+      color: #6c7086;
+      font-size: 0.78rem;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.4rem;
+      text-transform: uppercase;
+    }
+
+    .paradigm table {
+      border-collapse: collapse;
+      font-size: 0.88rem;
+      width: auto;
+    }
+
+    .paradigm th, .paradigm td {
+      border: 1px solid #313244;
+      padding: 0.25rem 0.65rem;
+      text-align: left;
+    }
+
+    .paradigm th {
+      background: #1e1e2e;
+      color: #6c7086;
+      font-weight: normal;
+    }
+
+    .paradigm td { color: #cdd6f4; }
+    .paradigm td.dash { color: #45475a; }
+
+    .lookup-no-results { color: #585b70; font-style: italic; }
   </style>
 </head>
 <body>
@@ -352,6 +437,130 @@
   {% endfor %}
 </div>
 {% endif %}
+
+<!-- ── Headword lookup ── -->
+<div class="lookup-section">
+  <h2>Look up headword</h2>
+
+  <form method="post" action="/lookup">
+    <input
+      id="lookup-input"
+      name="headword"
+      type="text"
+      autocomplete="off"
+      placeholder="e.g. konungr, gefa, sterkr…"
+      value="{{ lookup_query }}"
+    >
+    <button type="submit">Look up</button>
+  </form>
+
+  {% if lookup_query %}
+  <div class="lookup-results" style="margin-top:1.5rem;">
+    {% if lookup_results %}
+      {% for e in lookup_results %}
+      <div class="lookup-entry">
+        <div class="lookup-hw">
+          {% if e.glossary_url %}
+          <a class="pdf-link" href="{{ e.glossary_url }}" target="_blank">{{ e.headword }}</a>
+          {% else %}
+          {{ e.headword }}
+          {% endif %}
+          <span class="lk-meta">
+            &nbsp;{{ e.pos }}{% if e.gender %}&nbsp;·&nbsp;{{ e.gender }}{% endif %}{% if e.strength %}&nbsp;·&nbsp;{{ e.strength }}{% endif %}
+          </span>
+        </div>
+
+        {% if e.principal_parts %}
+        <div class="lookup-pp">Principal parts: {{ e.principal_parts }}</div>
+        {% endif %}
+
+        {% if e.definition %}
+        <div class="lookup-defn">{{ e.definition }}</div>
+        {% endif %}
+
+        {% if e.grammar_ref %}
+        <div class="lookup-gr">
+          Grammar:&nbsp;{% if e.grammar_url %}<a class="pdf-link" href="{{ e.grammar_url }}" target="_blank">{{ e.grammar_ref }}</a>{% else %}{{ e.grammar_ref }}{% endif %}
+        </div>
+        {% endif %}
+
+        {% if e.table %}
+        <div class="paradigm">
+          {% set t = e.table %}
+
+          {% if t.type == 'noun' %}
+          <div class="paradigm-section">
+            <div class="paradigm-section-label">Declension</div>
+            <table>
+              <tr><th></th><th>sg</th><th>pl</th></tr>
+              {% for case, sg, pl in t.rows %}
+              <tr>
+                <th>{{ case }}</th>
+                <td class="{{ 'dash' if sg == '—' else '' }}">{{ sg }}</td>
+                <td class="{{ 'dash' if pl == '—' else '' }}">{{ pl }}</td>
+              </tr>
+              {% endfor %}
+            </table>
+          </div>
+
+          {% elif t.type == 'adjective' %}
+          <div class="paradigm-section">
+            <div class="paradigm-section-label">Declension</div>
+            <table>
+              <tr><th></th><th>m sg</th><th>f sg</th><th>n sg</th><th>m pl</th><th>f pl</th><th>n pl</th></tr>
+              {% for row in t.rows %}
+              <tr>
+                {% for cell in row %}
+                  {% if loop.first %}
+                  <th>{{ cell }}</th>
+                  {% else %}
+                  <td class="{{ 'dash' if cell == '—' else '' }}">{{ cell }}</td>
+                  {% endif %}
+                {% endfor %}
+              </tr>
+              {% endfor %}
+            </table>
+          </div>
+
+          {% elif t.type == 'verb' %}
+            {% for section in t.sections %}
+            <div class="paradigm-section">
+              <div class="paradigm-section-label">{{ section.label }}</div>
+              {% if section.non_finite %}
+              <table>
+                {% for label, form in section.rows %}
+                <tr>
+                  <th>{{ label }}</th>
+                  <td>{{ form }}</td>
+                </tr>
+                {% endfor %}
+              </table>
+              {% else %}
+              <table>
+                <tr><th></th><th>sg</th><th>pl</th></tr>
+                {% for person, sg, pl in section.rows %}
+                <tr>
+                  <th>{{ person }}.</th>
+                  <td class="{{ 'dash' if sg == '—' else '' }}">{{ sg }}</td>
+                  <td class="{{ 'dash' if pl == '—' else '' }}">{{ pl }}</td>
+                </tr>
+                {% endfor %}
+              </table>
+              {% endif %}
+            </div>
+            {% endfor %}
+          {% endif %}
+
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="lookup-no-results">No entries found for "{{ lookup_query }}".</div>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
 
 <script>
   function toggle(id) {

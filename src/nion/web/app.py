@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from nion.db.schema import get_connection
+from nion.encoding import normalize_for_search
 from nion.morphology.parser import parse_form
 from nion.morphology.ranker import rank_analyses
 
@@ -180,6 +181,152 @@ def _build_token_data(tokens: list[str], conn) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Paradigm table builders for the lookup view
+# ---------------------------------------------------------------------------
+
+_CASES   = ["nom", "acc", "dat", "gen"]
+_NUMBERS = ["sg", "pl"]
+_GENDERS = ["m", "f", "n"]
+
+_VERB_SECTIONS = [
+    ("Present indicative",  "pres", "indic"),
+    ("Past indicative",     "past", "indic"),
+    ("Present subjunctive", "pres", "subj"),
+    ("Past subjunctive",    "past", "subj"),
+]
+
+_NON_FINITE_LABELS = {
+    "infin":     "infinitive",
+    "imp":       "imperative",
+    "pres_part": "pres. participle",
+    "past_part": "past participle",
+}
+
+
+def _cell(form_map: dict, *keys) -> str:
+    """Return ' / '-joined forms for a cell, or '—' if none."""
+    forms = form_map.get(keys, [])
+    return " / ".join(sorted(set(forms))) if forms else "—"
+
+
+def _build_noun_table(forms: list[dict]) -> dict:
+    fm: dict = {}
+    for f in forms:
+        key = (f["case_"], f["number"])
+        fm.setdefault(key, []).append(f["form"])
+    rows = [
+        (case, _cell(fm, case, "sg"), _cell(fm, case, "pl"))
+        for case in _CASES
+    ]
+    return {"type": "noun", "rows": rows}
+
+
+def _build_adj_table(forms: list[dict]) -> dict:
+    fm: dict = {}
+    for f in forms:
+        key = (f["case_"], f["number"], f["gender"])
+        fm.setdefault(key, []).append(f["form"])
+    rows = []
+    for case in _CASES:
+        row = [case]
+        for num in _NUMBERS:
+            for gen in _GENDERS:
+                row.append(_cell(fm, case, num, gen))
+        rows.append(row)
+    return {"type": "adjective", "rows": rows}
+
+
+def _build_verb_table(forms: list[dict]) -> dict:
+    fm: dict = {}
+    for f in forms:
+        key = (f["mood"], f["tense"], f["person"], f["number"])
+        fm.setdefault(key, []).append(f["form"])
+
+    sections = []
+    for label, tense, mood in _VERB_SECTIONS:
+        rows = []
+        for person in ("1", "2", "3"):
+            sg = _cell(fm, mood, tense, person, "sg")
+            pl = _cell(fm, mood, tense, person, "pl")
+            if sg != "—" or pl != "—":
+                rows.append((person, sg, pl))
+        if rows:
+            sections.append({"label": label, "rows": rows})
+
+    # Non-finite forms
+    nf_rows = []
+    for mood_key, label in _NON_FINITE_LABELS.items():
+        # imp uses tense=None; inf/parts use tense from the key
+        forms_imp  = fm.get((mood_key, None, "2", "sg"), [])
+        forms_nf   = fm.get((mood_key, "pres" if mood_key == "pres_part" else
+                                        "past" if mood_key == "past_part" else None,
+                              None, None), [])
+        combined = forms_imp or forms_nf
+        if combined:
+            nf_rows.append((label, " / ".join(sorted(set(combined)))))
+    if nf_rows:
+        sections.append({"label": "Non-finite", "rows": nf_rows, "non_finite": True})
+
+    return {"type": "verb", "sections": sections}
+
+
+def _build_lookup_result(entry_row, conn) -> dict:
+    """Build a full lookup result dict for one entry row."""
+    eid   = entry_row["id"]
+    pos   = entry_row["pos"]
+    forms = conn.execute(
+        "SELECT case_, number, gender, person, mood, tense, form "
+        "FROM forms WHERE entry_id = ? ORDER BY tense, mood, case_, number, gender, person",
+        (eid,),
+    ).fetchall()
+    forms = [dict(f) for f in forms]
+
+    if pos == "noun":
+        table = _build_noun_table(forms)
+    elif pos == "adjective":
+        table = _build_adj_table(forms)
+    elif pos == "verb":
+        table = _build_verb_table(forms)
+    else:
+        table = None
+
+    glossary_page = entry_row["page_number"]
+    par = conn.execute(
+        "SELECT page_number FROM paradigms WHERE id = ?",
+        (entry_row["paradigm_id"],),
+    ).fetchone() if entry_row["paradigm_id"] else None
+    grammar_page = par["page_number"] if par else None
+
+    return {
+        "headword":        entry_row["headword"],
+        "pos":             pos,
+        "gender":          entry_row["gender"] or "",
+        "strength":        entry_row["strength"] or "",
+        "definition":      entry_row["definition"] or "",
+        "grammar_ref":     entry_row["grammar_ref"] or "",
+        "principal_parts": entry_row["principal_parts"] or "",
+        "glossary_url":    f"/pdfs/glossary.pdf#page={glossary_page}" if glossary_page else None,
+        "grammar_url":     f"/pdfs/grammar.pdf#page={grammar_page}"   if grammar_page  else None,
+        "table":           table,
+    }
+
+
+def _lookup_entries(query: str, conn) -> list[dict]:
+    """Search entries by headword, exact then prefix fallback."""
+    norm = normalize_for_search(query)
+    rows = conn.execute(
+        "SELECT * FROM entries WHERE headword_normalized = ? AND pos != 'xref' ORDER BY headword",
+        (norm,),
+    ).fetchall()
+    if not rows:
+        rows = conn.execute(
+            "SELECT * FROM entries WHERE headword_normalized LIKE ? AND pos != 'xref' ORDER BY headword LIMIT 12",
+            (norm + "%",),
+        ).fetchall()
+    return [_build_lookup_result(r, conn) for r in rows]
+
+
+# ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
 
@@ -187,7 +334,7 @@ def _build_token_data(tokens: list[str], conn) -> list[dict]:
 async def index(request: Request):
     return templates.TemplateResponse(
         request, "index.html",
-        {"token_data": [], "query": ""},
+        {"token_data": [], "query": "", "lookup_query": "", "lookup_results": []},
     )
 
 
@@ -202,5 +349,15 @@ async def analyze(request: Request, text: str = Form(...)):
 
     return templates.TemplateResponse(
         request, "index.html",
-        {"token_data": token_data, "query": text},
+        {"token_data": token_data, "query": text, "lookup_query": "", "lookup_results": []},
+    )
+
+
+@app.post("/lookup", response_class=HTMLResponse)
+async def lookup(request: Request, headword: str = Form(...)):
+    conn = _get_conn()
+    results = _lookup_entries(headword.strip(), conn) if headword.strip() else []
+    return templates.TemplateResponse(
+        request, "index.html",
+        {"token_data": [], "query": "", "lookup_query": headword.strip(), "lookup_results": results},
     )
