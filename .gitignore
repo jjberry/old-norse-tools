@@ -13,6 +13,8 @@ uv.lock
 # Project data (reproducible from PDFs)
 data/pdfs/
 data/*.db
+data/*.db-shm
+data/*.db-wal
 
 # IDE
 .vscode/
