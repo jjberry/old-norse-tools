@@ -82,7 +82,7 @@ nion-build --pdfs path/to/pdfs --db path/to/output.db
 
 ```bash
 # Pass text directly
-nion-analyze "konungr spyrr um mat ok drykk"
+nion-analyze "konungr spyrr hann um mat"
 
 # Or from a file
 nion-analyze --file my_text.txt
@@ -98,22 +98,21 @@ spyrr
   spyrja (verb weak) — 2sg pres — ask
   spyrja (verb weak) — 3sg pres — ask
 
+hann
+  hann (pron) — nom — he  [reader]
+  hann (pron) — acc — him  [reader]
+
 um
-  ?  no match
+  um (prep) — — — around  [reader]
 
 mat
   matr (noun m) — acc.sg — food
-
-ok
-  ?  no match
-
-drykk
-  drykkr (noun m) — acc.sg — drink, draught
 ```
 
-Words with multiple analyses (like `spyrr`, which is ambiguous between 2nd and 3rd
-person) show all possibilities. Function words and uninflected particles not covered
-by the paradigm tables show `?  no match`.
+Words with multiple analyses (like `spyrr`, ambiguous between 2nd and 3rd person)
+show all possibilities. Results marked `[reader]` come from the annotated glosses in
+the NION Reader rather than the paradigm tables — useful for pronouns, prepositions,
+conjunctions, and strong verb forms that paradigm generation cannot derive.
 
 ---
 
