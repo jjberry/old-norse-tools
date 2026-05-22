@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Old Norse Tools</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #1e1e2e;
+      color: #cdd6f4;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 15px;
+      line-height: 1.6;
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+    }
+
+    h1 {
+      font-size: 1.4rem;
+      color: #cba6f7;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.25rem;
+    }
+
+    .subtitle {
+      color: #6c7086;
+      font-size: 0.85rem;
+      margin-bottom: 2rem;
+    }
+
+    /* ── Input form ── */
+    form {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 2.5rem;
+    }
+
+    input[name="text"] {
+      flex: 1;
+      background: #313244;
+      border: 1px solid #45475a;
+      border-radius: 4px;
+      color: #cdd6f4;
+      font-family: inherit;
+      font-size: 1rem;
+      padding: 0.5rem 0.85rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    input[name="text"]:focus {
+      border-color: #cba6f7;
+    }
+
+    button[type="submit"] {
+      background: #cba6f7;
+      border: none;
+      border-radius: 4px;
+      color: #1e1e2e;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: bold;
+      padding: 0.5rem 1.25rem;
+      transition: background 0.15s;
+    }
+
+    button[type="submit"]:hover { background: #d4b8f9; }
+
+    /* ── Token blocks ── */
+    .results { display: flex; flex-direction: column; gap: 1.5rem; }
+
+    .token-block {
+      border-left: 2px solid #45475a;
+      padding-left: 1rem;
+      transition: border-color 0.15s;
+    }
+
+    .token-block.open { border-left-color: #cba6f7; }
+
+    .token-header {
+      align-items: baseline;
+      cursor: pointer;
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 0.35rem;
+      user-select: none;
+    }
+
+    .token-header:hover .surface { color: #f5c2e7; }
+
+    .toggle-icon {
+      color: #6c7086;
+      font-size: 0.7rem;
+      transition: transform 0.15s;
+      width: 0.8rem;
+    }
+
+    .open .toggle-icon { transform: rotate(90deg); color: #cba6f7; }
+
+    .surface {
+      color: #cba6f7;
+      font-size: 1.05rem;
+      font-weight: bold;
+    }
+
+    /* ── Analysis rows ── */
+    .analyses { padding-left: 0.3rem; }
+
+    .analysis {
+      color: #cdd6f4;
+      padding: 0.15rem 0;
+    }
+
+    .hw    { font-weight: bold; }
+    .meta  { color: #89dceb; }
+    .sep   { color: #45475a; margin: 0 0.3rem; }
+    .morph { color: #a6e3a1; font-style: italic; }
+    .defn  { color: #bac2de; }
+    .reader-tag { color: #585b70; font-style: italic; margin-left: 0.5rem; }
+
+    .no-match { color: #585b70; font-style: italic; }
+
+    /* ── Entry panel ── */
+    .entry-panel {
+      background: #26263e;
+      border-left: 3px solid #cba6f7;
+      border-radius: 0 4px 4px 0;
+      display: none;
+      margin-top: 0.75rem;
+      padding: 1rem 1.2rem;
+    }
+
+    .open .entry-panel { display: block; }
+
+    .entry + .entry { margin-top: 1rem; border-top: 1px solid #45475a; padding-top: 1rem; }
+
+    .entry-head {
+      color: #cba6f7;
+      font-size: 1rem;
+      font-weight: bold;
+      margin-bottom: 0.4rem;
+    }
+
+    .entry-head .entry-meta { color: #6c7086; font-weight: normal; font-size: 0.85rem; }
+
+    .entry-definition {
+      color: #cdd6f4;
+      line-height: 1.55;
+      margin-bottom: 0.5rem;
+      word-break: break-word;
+    }
+
+    .entry-grammar  { color: #89b4fa; font-size: 0.85rem; margin-bottom: 0.2rem; }
+    .entry-pp       { color: #89b4fa; font-size: 0.85rem; margin-bottom: 0.2rem; }
+
+    .annotation-panel { color: #bac2de; }
+    .annotation-panel .gloss { color: #a6e3a1; }
+    .annotation-panel .source-note { color: #585b70; font-size: 0.8rem; margin-top: 0.4rem; }
+  </style>
+</head>
+<body>
+
+<h1>Old Norse Tools</h1>
+<p class="subtitle">Morphological analysis · VSNR <em>A New Introduction to Old Norse</em></p>
+
+<form method="post" action="/analyze">
+  <input
+    name="text"
+    type="text"
+    autofocus
+    autocomplete="off"
+    placeholder="Enter Old Norse text…"
+    value="{{ query }}"
+  >
+  <button type="submit">Analyze</button>
+</form>
+
+{% if token_data %}
+<div class="results">
+  {% for item in token_data %}
+  <div class="token-block" id="tb-{{ loop.index }}">
+
+    <div class="token-header" onclick="toggle('tb-{{ loop.index }}')">
+      <span class="toggle-icon">▶</span>
+      <span class="surface">{{ item.token }}</span>
+    </div>
+
+    <div class="analyses">
+      {% if item.no_match %}
+        <div class="no-match">?&nbsp;&nbsp;no match</div>
+      {% else %}
+        {% for r in item.rows %}
+        <div class="analysis{% if r.source == 'annotation' %} reader{% endif %}">
+          <span class="hw">{{ r.headword_display }}</span>
+          <span class="meta">({{ r.pos }}{% if r.entry_gender %}&nbsp;{{ r.entry_gender }}{% endif %}{% if r.strength %}&nbsp;{{ r.strength }}{% endif %})</span>
+          <span class="sep">—</span>
+          <span class="morph">{{ r.morph if r.morph else "—" }}</span>
+          <span class="sep">—</span>
+          <span class="defn">{{ r.defn_short if r.defn_short else "—" }}</span>
+          {% if r.source == 'annotation' %}
+          <span class="reader-tag">[reader]</span>
+          {% endif %}
+        </div>
+        {% endfor %}
+      {% endif %}
+    </div>
+
+    {% if not item.no_match %}
+    <div class="entry-panel">
+      {% if item.annotation_only and item.annotation_entry %}
+        <div class="annotation-panel">
+          <div class="entry-head">
+            {{ item.annotation_entry.headword }}
+            {% if item.annotation_entry.pos %}
+            <span class="entry-meta">&nbsp;{{ item.annotation_entry.pos }}</span>
+            {% endif %}
+          </div>
+          {% if item.annotation_entry.gloss %}
+          <div class="entry-definition">
+            <span class="gloss">{{ item.annotation_entry.gloss }}</span>
+          </div>
+          {% endif %}
+          <div class="source-note">Source: NION Reader annotation (no full glossary entry)</div>
+        </div>
+
+      {% else %}
+        {% for e in item.entries %}
+        <div class="entry">
+          <div class="entry-head">
+            {{ e.headword }}
+            <span class="entry-meta">
+              &nbsp;{{ e.pos }}{% if e.gender %}&nbsp;·&nbsp;{{ e.gender }}{% endif %}{% if e.strength %}&nbsp;·&nbsp;{{ e.strength }}{% endif %}
+            </span>
+          </div>
+          {% if e.principal_parts %}
+          <div class="entry-pp">Principal parts: {{ e.principal_parts }}</div>
+          {% endif %}
+          {% if e.definition %}
+          <div class="entry-definition">{{ e.definition }}</div>
+          {% endif %}
+          {% if e.grammar_ref %}
+          <div class="entry-grammar">Grammar: {{ e.grammar_ref }}</div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      {% endif %}
+    </div>
+    {% endif %}
+
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<script>
+  function toggle(id) {
+    document.getElementById(id).classList.toggle('open');
+  }
+</script>
+
+</body>
+</html>

@@ -28,11 +28,15 @@ def parse_form(form: str, conn: sqlite3.Connection) -> list[dict]:
                f.person,
                f.mood,
                f.tense,
+               e.id              AS entry_id,
                e.headword,
                e.definition,
                e.pos,
-               e.gender   AS entry_gender,
-               e.strength
+               e.gender          AS entry_gender,
+               e.strength,
+               e.grammar_ref,
+               e.principal_parts,
+               e.text_refs
         FROM   forms   f
         JOIN   entries e ON f.entry_id = e.id
         WHERE  f.form_normalized = ?

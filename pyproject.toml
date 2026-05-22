@@ -7,11 +7,16 @@ dependencies = [
     "pdfplumber>=0.11",
     "click>=8.1",
     "rich>=13.0",
+    "fastapi>=0.100",
+    "uvicorn>=0.27",
+    "jinja2>=3.0",
+    "python-multipart>=0.0.9",
 ]
 
 [project.scripts]
-nion-build = "nion.scripts.build_db:main"
+nion-build   = "nion.scripts.build_db:main"
 nion-analyze = "nion.tools.analyze:main"
+nion-serve   = "nion.scripts.serve:main"
 
 [dependency-groups]
 dev = [
